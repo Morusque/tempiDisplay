@@ -1,16 +1,18 @@
 
 String outputFilename = "tempiSet01.txt";
 float[] tempi = {-1};  // Enter fixed tempo or -1 to tap live
-String[] trackNames = {"Track A"};
+String[] trackNames = {"Track 1"};
 
 float minTempo, maxTempo;
+float minSuggestion = 50;
+float maxSuggestion = 200;
 float leftMargin = 40;
 float labelWidth = 260;
 float chartRightMargin = 60;
 float hoverRadius = 10;
 int hoveredIndex = -1;
 int selectedTrack = 0;
-String editingMode = ""; // "tempo", "divide", "multiply"
+String editingMode = ""; // "tempo", "divide", "multiply", "min", "max"
 int editTrack = -1;
 String tempoInput = "";
 float[] divideFactors;
@@ -31,7 +33,7 @@ void setup() {
   textAlign(CENTER, CENTER);
   textSize(14);
 
-  topGuideY = 180;
+  topGuideY = 220;
   tapTimes = new ArrayList<Long>();
 
   initTrackColors();
@@ -92,7 +94,7 @@ void drawHeader() {
 }
 
 void drawButtons() {
-  float buttonY = 100;
+  float buttonY = 110;
   float buttonW = 88;
   float buttonH = 32;
   drawButton("Prev Track", leftMargin, buttonY, buttonW, buttonH, false);
@@ -104,6 +106,9 @@ void drawButtons() {
   drawButton("Zoom In", leftMargin + 6 * (buttonW + 10), buttonY, buttonW, buttonH, false);
   drawButton("Zoom Out", leftMargin + 7 * (buttonW + 10), buttonY, buttonW, buttonH, false);
   drawButton("Save", leftMargin + 8 * (buttonW + 10), buttonY, buttonW, buttonH, false);
+  drawButton("Load", leftMargin + 9 * (buttonW + 10), buttonY, buttonW, buttonH, false);
+  drawRangeField("Min", leftMargin + 10 * (buttonW + 10), buttonY, 80, buttonH, minSuggestion, editingMode.equals("min"));
+  drawRangeField("Max", leftMargin + 10 * (buttonW + 10) + 90, buttonY, 80, buttonH, maxSuggestion, editingMode.equals("max"));
 }
 
 void drawButton(String label, float x, float y, float w, float h, boolean active) {
@@ -117,6 +122,20 @@ void drawButton(String label, float x, float y, float w, float h, boolean active
   textAlign(CENTER, CENTER);
   textSize(12);
   text(label, x + w / 2, y + h / 2);
+  textSize(14);
+}
+
+void drawRangeField(String label, float x, float y, float w, float h, float value, boolean active) {
+  rectMode(CORNER);
+  stroke(0);
+  strokeWeight(1);
+  fill(active ? color(230, 240, 255) : 245);
+  rect(x, y, w, h, 5);
+  fill(0);
+  noStroke();
+  textAlign(CENTER, CENTER);
+  textSize(11);
+  text(label + ": " + int(value), x + w / 2, y + h / 2);
   textSize(14);
 }
 
@@ -146,9 +165,9 @@ void drawTimelineGuide() {
 }
 
 void drawTrackRows() {
-  drawSuggestionRow(topGuideY + 40);
+  drawSuggestionRow(topGuideY + 60);
   for (int i = 0; i < tempi.length; i++) {
-    float y = topGuideY + 40 + (i + 1) * rowHeight;
+    float y = topGuideY + 60 + (i + 1) * rowHeight;
     drawTrackRow(i, y);
   }
 }
@@ -275,7 +294,7 @@ void drawParamField(float x, float y, float w, float h, String label, float valu
 void drawSuggestions() {
   if (suggestionTempi == null) return;
 
-  float y = topGuideY;
+  float y = topGuideY + 20;
   stroke(200);
   strokeWeight(1);
   line(chartLeft(), y, chartRight(), y);
@@ -346,19 +365,19 @@ void showHoverTempo(float x, float y) {
 }
 
 float getHoveredRowY(float y) {
-  float suggestionsY = topGuideY;
+  float suggestionsY = topGuideY + 20;
   if (abs(y - suggestionsY) <= rowHeight / 2) return suggestionsY;
-  float suggestionsBaseY = topGuideY + 40;
+  float suggestionsBaseY = topGuideY + 60;
   if (abs(y - suggestionsBaseY) <= rowHeight / 2) return suggestionsBaseY;
   for (int i = 0; i < tempi.length; i++) {
-    float rowY = topGuideY + 40 + (i + 1) * rowHeight;
+    float rowY = topGuideY + 60 + (i + 1) * rowHeight;
     if (abs(y - rowY) <= rowHeight / 2) return rowY;
   }
   return -1;
 }
 
 void mousePressed() {
-  float buttonY = 100;
+  float buttonY = 110;
   float buttonW = 88;
   float buttonH = 32;
 
@@ -397,6 +416,23 @@ void mousePressed() {
   if (hitButton(mouseX, mouseY, leftMargin + 8 * (buttonW + 10), buttonY, buttonW, buttonH)) {
     selectOutput("Choose a tempo save file:", "fileSelected");
     return;
+  }
+  if (hitButton(mouseX, mouseY, leftMargin + 9 * (buttonW + 10), buttonY, buttonW, buttonH)) {
+    selectInput("Choose a tempo load file:", "loadFileSelected");
+    return;
+  }
+
+  float minX = leftMargin + 10 * (buttonW + 10);
+  float maxX = minX + 90;
+  if (mouseY >= buttonY && mouseY <= buttonY + buttonH) {
+    if (mouseX >= minX && mouseX <= minX + 80) {
+      startParamEdit("min", selectedTrack);
+      return;
+    }
+    if (mouseX >= maxX && mouseX <= maxX + 80) {
+      startParamEdit("max", selectedTrack);
+      return;
+    }
   }
 
   // Select track by clicking its row
@@ -553,7 +589,11 @@ void startParamEdit(String mode, int track) {
   editingMode = mode;
   editTrack = track;
   tempoInput = "";
-  tapMessage = "Type " + mode + " factor for " + trackNames[track] + ", then press Enter.";
+  if (mode.equals("min") || mode.equals("max")) {
+    tapMessage = "Type " + mode + " suggestion boundary, then press Enter.";
+  } else {
+    tapMessage = "Type " + mode + " factor for " + trackNames[track] + ", then press Enter.";
+  }
 }
 
 void fileSelected(File selection) {
@@ -563,6 +603,14 @@ void fileSelected(File selection) {
   }
   outputFilename = selection.getAbsolutePath();
   saveTempoFile();
+}
+
+void loadFileSelected(File selection) {
+  if (selection == null) {
+    tapMessage = "Load canceled.";
+    return;
+  }
+  loadTempoFile(selection);
 }
 
 boolean hitButton(float x, float y, float bx, float by, float bw, float bh) {
@@ -625,6 +673,47 @@ void saveTempoFile() {
   saveMessageTimer = millis();
 }
 
+void loadTempoFile(File selection) {
+  String[] lines = loadStrings(selection);
+  if (lines == null) {
+    tapMessage = "Could not read file.";
+    return;
+  }
+  ArrayList<Float> loadedTempi = new ArrayList<Float>();
+  ArrayList<String> loadedNames = new ArrayList<String>();
+  for (int i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith("#")) continue;
+    String[] parts = split(lines[i], ',');
+    if (parts.length >= 3) {
+      loadedNames.add(parts[1]);
+      if (parts[2].equals("unset")) {
+        loadedTempi.add(0.0);
+      } else {
+        loadedTempi.add(float(parts[2]));
+      }
+    }
+  }
+  if (loadedTempi.size() > 0) {
+    tempi = new float[loadedTempi.size()];
+    trackNames = new String[loadedTempi.size()];
+    divideFactors = new float[loadedTempi.size()];
+    multiplyFactors = new float[loadedTempi.size()];
+    for (int i = 0; i < loadedTempi.size(); i++) {
+      tempi[i] = loadedTempi.get(i);
+      trackNames[i] = loadedNames.get(i);
+      divideFactors[i] = 1;
+      multiplyFactors[i] = 1;
+    }
+    selectedTrack = 0;
+    recomputeTempoBounds();
+    suggestionTempi = computeSuggestions(5);
+    suggestionTempiBaseOnly = computeSuggestionsBaseOnly(5);
+    tapMessage = "Loaded " + loadedTempi.size() + " tracks from file.";
+  } else {
+    tapMessage = "No valid tempo lines in file.";
+  }
+}
+
 void keyPressed() {
   if (editingMode.equals("")) {
     if (key == 'e' || key == 'E') {
@@ -654,6 +743,13 @@ void keyPressed() {
         } else if (editingMode.equals("multiply")) {
           multiplyFactors[editTrack] = value;
           tapMessage = "Multiply factor " + nf(value, 0, 0) + " saved for " + trackNames[editTrack];
+        } else if (editingMode.equals("min")) {
+          minSuggestion = min(value, maxSuggestion - 1);
+          minSuggestion = max(minSuggestion, 10);
+          tapMessage = "Minimum suggestion set to " + int(minSuggestion);
+        } else if (editingMode.equals("max")) {
+          maxSuggestion = max(value, minSuggestion + 1);
+          tapMessage = "Maximum suggestion set to " + int(maxSuggestion);
         }
         suggestionTempi = computeSuggestions(5);
         suggestionTempiBaseOnly = computeSuggestionsBaseOnly(5);
@@ -736,7 +832,7 @@ float[] computeSuggestions(int count) {
   float[] result = new float[count];
   for (int k = 0; k < count; k++) {
     float bestNorm = findLargestGapMidpoint(occupied);
-    result[k] = normToTempo(bestNorm);
+    result[k] = suggestionNormToTempo(bestNorm);
     occupied.append(bestNorm);
   }
   return result;
@@ -747,7 +843,7 @@ float[] computeSuggestionsBaseOnly(int count) {
   float[] result = new float[count];
   for (int k = 0; k < count; k++) {
     float bestNorm = findLargestGapMidpoint(occupied);
-    result[k] = normToTempo(bestNorm);
+    result[k] = suggestionNormToTempo(bestNorm);
     occupied.append(bestNorm);
   }
   return result;
@@ -757,19 +853,19 @@ FloatList gatherVisibleTempi() {
   FloatList occupied = new FloatList();
   for (int i = 0; i < tempi.length; i++) {
     float baseTempo = tempi[i];
-    addTempoIfVisible(occupied, baseTempo);
+    addSuggestionTempoIfVisible(occupied, baseTempo);
     if (baseTempo > 0) {
       float d = max(divideFactors[i], 1);
       float t = baseTempo / d;
       while (t > 0) {
-        addTempoIfVisible(occupied, t);
+        addSuggestionTempoIfVisible(occupied, t);
         t /= 2;
       }
 
       float m = max(multiplyFactors[i], 1);
       t = baseTempo * m;
       while (t <= maxTempo) {
-        addTempoIfVisible(occupied, t);
+        addSuggestionTempoIfVisible(occupied, t);
         t *= 2;
       }
     }
@@ -780,18 +876,46 @@ FloatList gatherVisibleTempi() {
 FloatList gatherVisibleTempiBaseOnly() {
   FloatList occupied = new FloatList();
   for (int i = 0; i < tempi.length; i++) {
-    addTempoIfVisible(occupied, tempi[i]);
+    addSuggestionTempoIfVisible(occupied, tempi[i]);
   }
   return occupied;
 }
 
-void addTempoIfVisible(FloatList occupied, float t) {
-  if (t < minTempo || t > maxTempo || t <= 0) return;
-  float norm = tempoToNorm(t);
+void addSuggestionTempoIfVisible(FloatList occupied, float t) {
+  float minS = suggestionMinTempo();
+  float maxS = suggestionMaxTempo();
+  if (t < minS || t > maxS || t <= 0) return;
+  float norm = suggestionTempoToNorm(t);
   for (int i = 0; i < occupied.size(); i++) {
     if (circularDistance(norm, occupied.get(i)) < 0.0005) return;
   }
   occupied.append(norm);
+}
+
+float suggestionMinTempo() {
+  return max(minTempo, minSuggestion);
+}
+
+float suggestionMaxTempo() {
+  return min(maxTempo, maxSuggestion);
+}
+
+float suggestionTempoToNorm(float tempo) {
+  float logMin = log(suggestionMinTempo());
+  float logMax = log(suggestionMaxTempo());
+  if (logMax <= logMin) return 0.5;
+  return (log(tempo) - logMin) / (logMax - logMin);
+}
+
+float suggestionNormToTempo(float norm) {
+  float minS = suggestionMinTempo();
+  float maxS = suggestionMaxTempo();
+  float logMin = log(minS);
+  float logMax = log(maxS);
+  if (logMax <= logMin) {
+    return (minS + maxS) / 2.0;
+  }
+  return exp(logMin + norm * (logMax - logMin));
 }
 
 float findLargestGapMidpoint(FloatList occupied) {
