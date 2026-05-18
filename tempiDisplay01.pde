@@ -12,7 +12,7 @@ float chartRightMargin = 60;
 float hoverRadius = 10;
 int hoveredIndex = -1;
 int selectedTrack = 0;
-String editingMode = ""; // "tempo", "divide", "multiply", "min", "max"
+String editingMode = ""; // "tempo", "title", "divide", "multiply", "min", "max"
 int editTrack = -1;
 String tempoInput = "";
 float[] divideFactors;
@@ -29,7 +29,7 @@ boolean showSaveMessage = false;
 int saveMessageTimer = 0;
 
 void setup() {
-  size(1400, 700);
+  size(1400, 1000);
   textAlign(CENTER, CENTER);
   textSize(14);
 
@@ -101,14 +101,15 @@ void drawButtons() {
   drawButton("Next Track", leftMargin + buttonW + 10, buttonY, buttonW, buttonH, false);
   drawButton("Tap", leftMargin + 2 * (buttonW + 10), buttonY, buttonW, buttonH, false);
   drawButton("Edit", leftMargin + 3 * (buttonW + 10), buttonY, buttonW, buttonH, editingMode.equals("tempo"));
-  drawButton("Add Track", leftMargin + 4 * (buttonW + 10), buttonY, buttonW, buttonH, false);
-  drawButton("Remove Track", leftMargin + 5 * (buttonW + 10), buttonY, buttonW, buttonH, false);
-  drawButton("Zoom In", leftMargin + 6 * (buttonW + 10), buttonY, buttonW, buttonH, false);
-  drawButton("Zoom Out", leftMargin + 7 * (buttonW + 10), buttonY, buttonW, buttonH, false);
-  drawButton("Save", leftMargin + 8 * (buttonW + 10), buttonY, buttonW, buttonH, false);
-  drawButton("Load", leftMargin + 9 * (buttonW + 10), buttonY, buttonW, buttonH, false);
-  drawRangeField("Min", leftMargin + 10 * (buttonW + 10), buttonY, 80, buttonH, minSuggestion, editingMode.equals("min"));
-  drawRangeField("Max", leftMargin + 10 * (buttonW + 10) + 90, buttonY, 80, buttonH, maxSuggestion, editingMode.equals("max"));
+  drawButton("Title", leftMargin + 4 * (buttonW + 10), buttonY, buttonW, buttonH, editingMode.equals("title"));
+  drawButton("Add Track", leftMargin + 5 * (buttonW + 10), buttonY, buttonW, buttonH, false);
+  drawButton("Remove Track", leftMargin + 6 * (buttonW + 10), buttonY, buttonW, buttonH, false);
+  drawButton("Zoom In", leftMargin + 7 * (buttonW + 10), buttonY, buttonW, buttonH, false);
+  drawButton("Zoom Out", leftMargin + 8 * (buttonW + 10), buttonY, buttonW, buttonH, false);
+  drawButton("Save", leftMargin + 9 * (buttonW + 10), buttonY, buttonW, buttonH, false);
+  drawButton("Load", leftMargin + 10 * (buttonW + 10), buttonY, buttonW, buttonH, false);
+  drawRangeField("Min", leftMargin + 11 * (buttonW + 10), buttonY, 80, buttonH, minSuggestion, editingMode.equals("min"));
+  drawRangeField("Max", leftMargin + 11 * (buttonW + 10) + 90, buttonY, 80, buttonH, maxSuggestion, editingMode.equals("max"));
 }
 
 void drawButton(String label, float x, float y, float w, float h, boolean active) {
@@ -165,10 +166,27 @@ void drawTimelineGuide() {
 }
 
 void drawTrackRows() {
+  ensureTrackArrays();
   drawSuggestionRow(topGuideY + 60);
   for (int i = 0; i < tempi.length; i++) {
     float y = topGuideY + 60 + (i + 1) * rowHeight;
     drawTrackRow(i, y);
+  }
+}
+
+void ensureTrackArrays() {
+  if (trackColors == null || trackColors.length != tempi.length) {
+    initTrackColors();
+  }
+  if (divideFactors == null || divideFactors.length != tempi.length || multiplyFactors == null || multiplyFactors.length != tempi.length) {
+    float[] newDivide = new float[tempi.length];
+    float[] newMultiply = new float[tempi.length];
+    for (int i = 0; i < tempi.length; i++) {
+      newDivide[i] = divideFactors != null && i < divideFactors.length ? divideFactors[i] : 2;
+      newMultiply[i] = multiplyFactors != null && i < multiplyFactors.length ? multiplyFactors[i] : 2;
+    }
+    divideFactors = newDivide;
+    multiplyFactors = newMultiply;
   }
 }
 
@@ -333,7 +351,10 @@ void drawStatus() {
   textSize(12);
   text("Tap info: " + tapMessage, leftMargin, height - 60);
   if (!editingMode.equals("")) {
-    String label = editingMode.equals("tempo") ? "Editing tempo" : "Editing " + editingMode + " factor";
+    String label = editingMode.equals("tempo") ? "Editing tempo" :
+      editingMode.equals("title") ? "Editing title" :
+      editingMode.equals("min") || editingMode.equals("max") ? "Editing " + editingMode + " boundary" :
+      "Editing " + editingMode + " factor";
     text(label + " for " + trackNames[editTrack] + ": " + tempoInput + "_", leftMargin, height - 40);
   }
   if (showSaveMessage) {
@@ -398,31 +419,35 @@ void mousePressed() {
     return;
   }
   if (hitButton(mouseX, mouseY, leftMargin + 4 * (buttonW + 10), buttonY, buttonW, buttonH)) {
-    addTrack();
+    startTitleEdit();
     return;
   }
   if (hitButton(mouseX, mouseY, leftMargin + 5 * (buttonW + 10), buttonY, buttonW, buttonH)) {
-    removeTrack();
+    addTrack();
     return;
   }
   if (hitButton(mouseX, mouseY, leftMargin + 6 * (buttonW + 10), buttonY, buttonW, buttonH)) {
-    zoomIn();
+    removeTrack();
     return;
   }
   if (hitButton(mouseX, mouseY, leftMargin + 7 * (buttonW + 10), buttonY, buttonW, buttonH)) {
-    zoomOut();
+    zoomIn();
     return;
   }
   if (hitButton(mouseX, mouseY, leftMargin + 8 * (buttonW + 10), buttonY, buttonW, buttonH)) {
-    selectOutput("Choose a tempo save file:", "fileSelected");
+    zoomOut();
     return;
   }
   if (hitButton(mouseX, mouseY, leftMargin + 9 * (buttonW + 10), buttonY, buttonW, buttonH)) {
+    selectOutput("Choose a tempo save file:", "fileSelected");
+    return;
+  }
+  if (hitButton(mouseX, mouseY, leftMargin + 10 * (buttonW + 10), buttonY, buttonW, buttonH)) {
     selectInput("Choose a tempo load file:", "loadFileSelected");
     return;
   }
 
-  float minX = leftMargin + 10 * (buttonW + 10);
+  float minX = leftMargin + 11 * (buttonW + 10);
   float maxX = minX + 90;
   if (mouseY >= buttonY && mouseY <= buttonY + buttonH) {
     if (mouseX >= minX && mouseX <= minX + 80) {
@@ -442,7 +467,7 @@ void mousePressed() {
   float multiplyX = leftMargin + labelWidth - 70;
 
   for (int i = 0; i < tempi.length; i++) {
-    float y = topGuideY + 40 + (i + 1) * rowHeight;
+    float y = topGuideY + 60 + (i + 1) * rowHeight;
     if (abs(mouseY - y) < rowHeight / 2) {
       if (mouseX >= divideX && mouseX <= divideX + fieldWidth) {
         startParamEdit("divide", i);
@@ -585,6 +610,13 @@ void startTempoEdit() {
   tapMessage = "Type tempo for " + trackNames[selectedTrack] + ", then press Enter.";
 }
 
+void startTitleEdit() {
+  editingMode = "title";
+  editTrack = selectedTrack;
+  tempoInput = trackNames[selectedTrack];
+  tapMessage = "Type title for " + trackNames[selectedTrack] + ", then press Enter.";
+}
+
 void startParamEdit(String mode, int track) {
   editingMode = mode;
   editTrack = track;
@@ -663,10 +695,10 @@ void handleTap() {
 void saveTempoFile() {
   String[] lines = new String[tempi.length + 2];
   lines[0] = "# Tempo file";
-  lines[1] = "# track,name,tempo";
+  lines[1] = "# track,name,tempo,divide,multiply";
   for (int i = 0; i < tempi.length; i++) {
     String tempoText = tempi[i] > 0 ? formatTempo(tempi[i]) : "unset";
-    lines[i + 2] = i + "," + trackNames[i] + "," + tempoText;
+    lines[i + 2] = i + "," + csvEscape(trackNames[i]) + "," + tempoText + "," + formatFactor(divideFactors[i]) + "," + formatFactor(multiplyFactors[i]);
   }
   saveStrings(outputFilename, lines);
   showSaveMessage = true;
@@ -681,16 +713,22 @@ void loadTempoFile(File selection) {
   }
   ArrayList<Float> loadedTempi = new ArrayList<Float>();
   ArrayList<String> loadedNames = new ArrayList<String>();
+  ArrayList<Float> loadedDivide = new ArrayList<Float>();
+  ArrayList<Float> loadedMultiply = new ArrayList<Float>();
   for (int i = 0; i < lines.length; i++) {
     if (lines[i].startsWith("#")) continue;
-    String[] parts = split(lines[i], ',');
+    if (trim(lines[i]).length() == 0) continue;
+    String[] parts = parseCsvLine(lines[i]);
     if (parts.length >= 3) {
-      loadedNames.add(parts[1]);
-      if (parts[2].equals("unset")) {
-        loadedTempi.add(0.0);
+      loadedNames.add(trim(parts[1]));
+      String tempoText = trim(parts[2]);
+      if (tempoText.equals("unset") || tempoText.equals("-1")) {
+        loadedTempi.add(-1.0);
       } else {
-        loadedTempi.add(float(parts[2]));
+        loadedTempi.add(float(tempoText));
       }
+      loadedDivide.add(parts.length >= 4 ? parsePositiveFloat(parts[3], 2) : 2.0);
+      loadedMultiply.add(parts.length >= 5 ? parsePositiveFloat(parts[4], 2) : 2.0);
     }
   }
   if (loadedTempi.size() > 0) {
@@ -701,10 +739,11 @@ void loadTempoFile(File selection) {
     for (int i = 0; i < loadedTempi.size(); i++) {
       tempi[i] = loadedTempi.get(i);
       trackNames[i] = loadedNames.get(i);
-      divideFactors[i] = 1;
-      multiplyFactors[i] = 1;
+      divideFactors[i] = loadedDivide.get(i);
+      multiplyFactors[i] = loadedMultiply.get(i);
     }
     selectedTrack = 0;
+    initTrackColors();
     recomputeTempoBounds();
     suggestionTempi = computeSuggestions(5);
     suggestionTempiBaseOnly = computeSuggestionsBaseOnly(5);
@@ -712,6 +751,57 @@ void loadTempoFile(File selection) {
   } else {
     tapMessage = "No valid tempo lines in file.";
   }
+}
+
+String csvEscape(String value) {
+  String clean = value == null ? "" : value;
+  boolean needsQuotes = clean.indexOf(',') >= 0 || clean.indexOf('"') >= 0 || clean.indexOf('\n') >= 0 || clean.indexOf('\r') >= 0;
+  clean = clean.replace("\"", "\"\"");
+  return needsQuotes ? "\"" + clean + "\"" : clean;
+}
+
+String[] parseCsvLine(String line) {
+  ArrayList<String> values = new ArrayList<String>();
+  String current = "";
+  boolean inQuotes = false;
+  for (int i = 0; i < line.length(); i++) {
+    char ch = line.charAt(i);
+    if (inQuotes) {
+      if (ch == '"') {
+        if (i + 1 < line.length() && line.charAt(i + 1) == '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        current += ch;
+      }
+    } else if (ch == '"') {
+      inQuotes = true;
+    } else if (ch == ',') {
+      values.add(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  values.add(current);
+  return values.toArray(new String[values.size()]);
+}
+
+float parsePositiveFloat(String text, float fallback) {
+  try {
+    float value = Float.parseFloat(trim(text));
+    if (value > 0) return value;
+  } catch (Exception e) {
+  }
+  return fallback;
+}
+
+String formatFactor(float factor) {
+  if (abs(factor - round(factor)) < 0.01) return str(int(round(factor)));
+  return nf(factor, 0, 2);
 }
 
 void keyPressed() {
@@ -731,30 +821,40 @@ void keyPressed() {
 
   if (key == ENTER || key == RETURN) {
     if (tempoInput.length() > 0) {
-      float value = float(tempoInput);
-      if (value > 0) {
-        if (editingMode.equals("tempo")) {
-          tempi[editTrack] = value;
-          recomputeTempoBounds();
-          tapMessage = "Tempo " + formatTempo(value) + " bpm set for " + trackNames[editTrack];
-        } else if (editingMode.equals("divide")) {
-          divideFactors[editTrack] = value;
-          tapMessage = "Divide factor " + nf(value, 0, 0) + " saved for " + trackNames[editTrack];
-        } else if (editingMode.equals("multiply")) {
-          multiplyFactors[editTrack] = value;
-          tapMessage = "Multiply factor " + nf(value, 0, 0) + " saved for " + trackNames[editTrack];
-        } else if (editingMode.equals("min")) {
-          minSuggestion = min(value, maxSuggestion - 1);
-          minSuggestion = max(minSuggestion, 10);
-          tapMessage = "Minimum suggestion set to " + int(minSuggestion);
-        } else if (editingMode.equals("max")) {
-          maxSuggestion = max(value, minSuggestion + 1);
-          tapMessage = "Maximum suggestion set to " + int(maxSuggestion);
+      if (editingMode.equals("title")) {
+        String title = trim(tempoInput);
+        if (title.length() > 0) {
+          trackNames[editTrack] = title;
+          tapMessage = "Title saved: " + trackNames[editTrack];
+        } else {
+          tapMessage = "Invalid title.";
         }
-        suggestionTempi = computeSuggestions(5);
-        suggestionTempiBaseOnly = computeSuggestionsBaseOnly(5);
       } else {
-        tapMessage = "Invalid input.";
+        float value = float(tempoInput);
+        if (value > 0) {
+          if (editingMode.equals("tempo")) {
+            tempi[editTrack] = value;
+            recomputeTempoBounds();
+            tapMessage = "Tempo " + formatTempo(value) + " bpm set for " + trackNames[editTrack];
+          } else if (editingMode.equals("divide")) {
+            divideFactors[editTrack] = value;
+            tapMessage = "Divide factor " + nf(value, 0, 0) + " saved for " + trackNames[editTrack];
+          } else if (editingMode.equals("multiply")) {
+            multiplyFactors[editTrack] = value;
+            tapMessage = "Multiply factor " + nf(value, 0, 0) + " saved for " + trackNames[editTrack];
+          } else if (editingMode.equals("min")) {
+            minSuggestion = min(value, maxSuggestion - 1);
+            minSuggestion = max(minSuggestion, 10);
+            tapMessage = "Minimum suggestion set to " + int(minSuggestion);
+          } else if (editingMode.equals("max")) {
+            maxSuggestion = max(value, minSuggestion + 1);
+            tapMessage = "Maximum suggestion set to " + int(maxSuggestion);
+          }
+          suggestionTempi = computeSuggestions(5);
+          suggestionTempiBaseOnly = computeSuggestionsBaseOnly(5);
+        } else {
+          tapMessage = "Invalid input.";
+        }
       }
     }
     editingMode = "";
@@ -764,10 +864,18 @@ void keyPressed() {
   }
 
   if (key == ESC) {
+    key = 0;
     editingMode = "";
     editTrack = -1;
     tempoInput = "";
     tapMessage = "Input canceled.";
+    return;
+  }
+
+  if (editingMode.equals("title")) {
+    if (key >= 32 && key != CODED) {
+      tempoInput += key;
+    }
     return;
   }
 
